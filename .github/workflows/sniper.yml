@@ -9,8 +9,7 @@ on:
     - cron: '*/15 * * * *'  # 每 15 分钟自动尝试一次
 
 permissions:
-  contents: read
-  administration: write   # 允许抢到后通过 API 自动禁用本 workflow
+  contents: write   # 抢到后推送 commit 停用 cron 定时(自动退役)
 
 jobs:
   sniper:
@@ -35,6 +34,9 @@ jobs:
       OS_VERSION: "24.04"
 
     steps:
+      - name: Checkout (needed for auto-disable commit)
+        uses: actions/checkout@v4
+
       - name: Install OCI CLI
         run: |
           curl -L -O https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh
@@ -68,13 +70,19 @@ jobs:
           mkdir -p ~/.ssh
           echo "${SSH_PUB_KEY}" > ~/.ssh/id_rsa_oracle.pub
 
-          # 抢到后禁用本 workflow, cron 从此不再触发
+          # 抢到后推送 commit 注释掉 cron, 自动退役(手动 Run 仍可用)
           disable_workflow() {
-            echo "[GUARD] Disabling workflow to stop future runs..."
-            if gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/sniper.yml/disable" >/dev/null 2>&1; then
-              echo "[GUARD] Workflow disabled. No more scheduled runs. DONE!"
+            echo "[GUARD] Disabling cron schedule (auto-retire)..."
+            cd "$GITHUB_WORKSPACE"
+            git config user.name "sniper-bot"
+            git config user.email "sniper-bot@users.noreply.github.com"
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            sed -i 's|^  schedule:$|  # schedule disabled by sniper-bot (A1 owned) at '"$(date +%F)"':|' .github/workflows/sniper.yml
+            sed -i 's|^    - cron: .*$|  #   &|' .github/workflows/sniper.yml
+            if git commit -am "ci: disable schedule - A1 instance owned [skip ci]" >/dev/null 2>&1 && git push origin HEAD >/dev/null 2>&1; then
+              echo "[GUARD] Schedule disabled. No more cron runs. DONE!"
             else
-              echo "[GUARD][WARN] Auto-disable failed. Please disable it manually in repo Settings/Actions!"
+              echo "[GUARD][WARN] Auto-disable failed. Please disable the workflow manually!"
             fi
           }
 
