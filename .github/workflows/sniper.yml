@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '*/15 * * * *'  # 每 15 分钟自动尝试一次
 
+permissions:
+  contents: read
+  administration: write   # 允许抢到后通过 API 自动禁用本 workflow
+
 jobs:
   sniper:
     name: ARM Instance Sniper
@@ -18,6 +22,7 @@ jobs:
       cancel-in-progress: false
 
     env:
+      GH_TOKEN: ${{ github.token }}
       OCI_TENANCY: ${{ secrets.TENANCY_OCID }}
       OCI_REGION: ${{ secrets.REGION }}
       SUBNET_ID: ${{ secrets.SUBNET_ID }}
@@ -63,6 +68,24 @@ jobs:
           mkdir -p ~/.ssh
           echo "${SSH_PUB_KEY}" > ~/.ssh/id_rsa_oracle.pub
 
+          # 抢到后禁用本 workflow, cron 从此不再触发
+          disable_workflow() {
+            echo "[GUARD] Disabling workflow to stop future runs..."
+            if gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/sniper.yml/disable" >/dev/null 2>&1; then
+              echo "[GUARD] Workflow disabled. No more scheduled runs. DONE!"
+            else
+              echo "[GUARD][WARN] Auto-disable failed. Please disable it manually in repo Settings/Actions!"
+            fi
+          }
+
+          # 哨兵检查: 已有存活的 A1 实例说明之前抢到过, 直接收工
+          EXISTING=$(oci compute instance list --compartment-id "${OCI_TENANCY}" --all 2>/dev/null | jq -r '[.data[] | select(.shape == "VM.Standard.A1.Flex" and .["lifecycle-state"] != "TERMINATED")][0].id // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "[ALREADY-OWNED] Existing A1 instance found: ${EXISTING}"
+            disable_workflow
+            exit 0
+          fi
+
           AD_LIST=$(oci iam availability-domain list --compartment-id "${OCI_TENANCY}" --query "data[*].name" --raw-output | jq -r '.[]' | sort)
           IMAGE_ID=$(oci compute image list --compartment-id "${OCI_TENANCY}" --operating-system "${OS_NAME}" --operating-system-version "${OS_VERSION}" --shape "VM.Standard.A1.Flex" --sort-by TIMECREATED --query 'data[0].id' --raw-output)
 
@@ -96,6 +119,7 @@ jobs:
                 >/dev/null 2>/dev/null; then
 
                 echo "[SUCCESS] instance created in $ad (config: ${SHAPE_CONFIG})"
+                disable_workflow
                 exit 0
               else
                 echo "$ad: No stock"

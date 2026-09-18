@@ -27,6 +27,6 @@
 
 - **机型**：默认真 2核12G（`ocpus:2 / memoryInGBs:12`，A1 免费额度 4C24G 的一半，以后还能再开一台小配置）。想单实例拿满全量额度，把 `sniper.yml` 里 `SHAPE_CONFIG` 改成 `'{"ocpus":4,"memoryInGBs":24}'`。
 - **系统镜像**：默认 Ubuntu 24.04，改 `OS_NAME` / `OS_VERSION` 两个 env 即可。
-- **防止重复抢**：脚本判断"成功"依赖 `--max-wait-seconds 1`，实例创建成功但 1 秒内未到 RUNNING 状态时日志可能仍显示 `No stock`。抢到后请去 OCI 控制台确认，及时手动 Disable / 删除本 workflow，避免无谓刷 API。
+- **防重复抢（抢到即自毁）**：每轮开头先检查租户里是否已有存活的 A1 实例——有则说明之前抢到了，自动禁用本 workflow 并退出；创建实例成功的瞬间也会自动禁用 workflow（通过 GitHub API），cron 从此不再触发，无需手动干预。若自动禁用失败（权限异常），日志会打印 `[GUARD][WARN]` 提醒手动去 Settings → Actions 关闭。
 - **GitHub 定时任务不精确**：`cron` 触发常有几分钟延迟；且仓库 **60 天无任何活动**时 GitHub 会自动停用 schedule，偶尔去手动跑一次或提交保持活跃。
 - **安全**：仓库务必保持 Private，所有凭证走 Secrets，不要写进代码。
