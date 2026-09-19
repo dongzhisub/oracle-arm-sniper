@@ -8,7 +8,7 @@
 
 ## 部署步骤
 
-1. 在你的 GitHub 账号下新建一个 **私有仓库（Private）**，把本目录内容（`.github/workflows/sniper.yml`）推上去。
+1. 在你的 GitHub 账号下新建一个仓库（**公共仓库推荐**：Actions 分钟数免费无限；私有仓库每月仅 2000 分钟免费额度，7×24 连续抢机会超量计费）。把本目录内容（`.github/workflows/sniper.yml`）推上去。
 2. 进入仓库 **Settings → Secrets and variables → Actions**，点 `New repository secret`，逐一添加以下 **7 个 Secrets**（变量名必须完全一致）：
 
 | Secret 名称 | 说明 | 获取位置 |
@@ -29,4 +29,4 @@
 - **系统镜像**：默认 Ubuntu 24.04，改 `OS_NAME` / `OS_VERSION` 两个 env 即可。
 - **防重复抢（抢到即自毁）**：每轮开头先检查租户里是否已有存活的 A1 实例——有则说明之前抢到了，自动禁用本 workflow 并退出；创建实例成功的瞬间也会自动禁用 workflow（通过 GitHub API），cron 从此不再触发，无需手动干预。若自动禁用失败（权限异常），日志会打印 `[GUARD][WARN]` 提醒手动去 Settings → Actions 关闭。
 - **GitHub 定时任务不精确**：`cron` 触发常有几分钟延迟；且仓库 **60 天无任何活动**时 GitHub 会自动停用 schedule，偶尔去手动跑一次或提交保持活跃。
-- **安全**：仓库务必保持 Private，所有凭证走 Secrets，不要写进代码。
+- **安全**：所有凭证走 Secrets，绝不写进代码。公共仓库下 Secrets 依然加密：运行日志中自动脱敏（显示 `***`）、外部 fork 的 PR 不会获得 Secrets、Secrets 无法通过任何 API 读出。

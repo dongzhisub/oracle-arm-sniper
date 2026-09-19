@@ -70,3 +70,12 @@ echo "${TS} dispatch=${CODE}" >> "${LOG}"
 - **抢到机器后**：workflow 会自动推送 commit 注释 cron 自退役，但 NAS 触发器
   是外部调用，**不会自动停**！抢到后请到 DSM 把任务 `sniper-trigger` 停用
   （workflow 哨兵会拦住重复创建，但建议干脆停掉省心）
+
+## 五、部署记录（2026-09-19）
+
+- ✅ PAT `sniper-dispatcher` 已生成：90 天（2026-12-18 到期）、仅 `oracle-arm-sniper`、Actions: Read and write，只读 API 实测 200
+- ✅ DSM 任务 `sniper-trigger` 已创建并启用（`https://192.168.1.49:5001`）：root 用户，每天 00:00–23:45 每 15 分钟（96 次/天），脚本已含 PAT
+- ✅ 手动触发验证：10:34:24 DSM 执行「正常 (0)」→ GitHub run 35416052867 立即创建（event=workflow_dispatch）
+- ✅ 自动调度验证：10:45:03 自动触发 → run 35416574749（间隔回归 15 分钟节奏）
+- ⏳ 待拍板：Actions 计费方案（仓库转 public 免费 / 接受超额计费）
+- 📌 PAT 到期（2026-12-18）后：重新生成 → DSM 任务计划里替换脚本中的 PAT → 保存
