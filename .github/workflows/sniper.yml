@@ -34,9 +34,6 @@ jobs:
       OS_VERSION: "24.04"
 
     steps:
-      - name: Checkout (needed for auto-disable commit)
-        uses: actions/checkout@v4
-
       - name: Install OCI CLI
         run: |
           curl -L -O https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh
@@ -70,19 +67,23 @@ jobs:
           mkdir -p ~/.ssh
           echo "${SSH_PUB_KEY}" > ~/.ssh/id_rsa_oracle.pub
 
-          # 抢到后推送 commit 注释掉 cron, 自动退役(手动 Run 仍可用)
+          # 抢到后临时 clone 仓库, 推送注释 cron 的 commit, 自动退役(手动 Run 仍可用)
           disable_workflow() {
             echo "[GUARD] Disabling cron schedule (auto-retire)..."
-            cd "$GITHUB_WORKSPACE"
-            git config user.name "sniper-bot"
-            git config user.email "sniper-bot@users.noreply.github.com"
-            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-            sed -i 's|^  schedule:$|  # schedule disabled by sniper-bot (A1 owned) at '"$(date +%F)"':|' .github/workflows/sniper.yml
-            sed -i 's|^    - cron: .*$|  #   &|' .github/workflows/sniper.yml
-            if git commit -am "ci: disable schedule - A1 instance owned [skip ci]" >/dev/null 2>&1 && git push origin HEAD >/dev/null 2>&1; then
-              echo "[GUARD] Schedule disabled. No more cron runs. DONE!"
+            REPO_TMP=$(mktemp -d)
+            if git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "${REPO_TMP}" >/dev/null 2>&1; then
+              cd "${REPO_TMP}"
+              git config user.name "sniper-bot"
+              git config user.email "sniper-bot@users.noreply.github.com"
+              sed -i 's|^  schedule:$|  # schedule disabled by sniper-bot (A1 owned) at '"$(date +%F)"':|' .github/workflows/sniper.yml
+              sed -i 's|^    - cron: .*$|  #   &|' .github/workflows/sniper.yml
+              if git commit -am "ci: disable schedule - A1 instance owned [skip ci]" >/dev/null 2>&1 && git push origin HEAD >/dev/null 2>&1; then
+                echo "[GUARD] Schedule disabled. No more cron runs. DONE!"
+              else
+                echo "[GUARD][WARN] Auto-disable failed. Please disable the workflow manually!"
+              fi
             else
-              echo "[GUARD][WARN] Auto-disable failed. Please disable the workflow manually!"
+              echo "[GUARD][WARN] Repo clone failed. Please disable the workflow manually!"
             fi
           }
 
